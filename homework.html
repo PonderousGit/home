@@ -4,9 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>每日作业单生成器 (带诗词版)</title>
-    <!-- 引入今日诗词 API -->
-    <script src="https://sdk.jinrishici.com/v2/browser/jinrishici.js" charset="utf-8"></script>
+    <title>每日作业单生成器 (可拖拽版)</title>
     <style>
         :root {
             --primary-color: #4f46e5;
@@ -110,6 +108,7 @@
             display: flex;
             flex-direction: column;
             gap: 1rem;
+            min-height: 50px; /* 留出空间给拖拽 */
         }
 
         .subject-item {
@@ -117,17 +116,51 @@
             padding: 1rem;
             border-radius: 0.5rem;
             border: 1px solid var(--border-color);
-            transition: transform 0.2s, box-shadow 0.2s;
+            transition: transform 0.2s, box-shadow 0.2s, background-color 0.2s;
+            display: flex;
+            align-items: flex-start; /* 顶部对齐 */
+            gap: 0.75rem;
+            position: relative;
         }
 
         .subject-item:hover {
             border-color: #d1d5db;
         }
 
+        /* 拖拽时的样式 */
+        .subject-item.dragging {
+            opacity: 0.5;
+            background-color: #e0e7ff;
+            border: 1px dashed var(--primary-color);
+        }
+
+        /* 拖拽手柄图标 */
+        .drag-handle {
+            cursor: grab;
+            color: #9ca3af;
+            display: flex;
+            align-items: center;
+            padding-top: 0.5rem;
+            flex-shrink: 0;
+        }
+
+        .drag-handle:active {
+            cursor: grabbing;
+            color: var(--primary-color);
+        }
+
+        .subject-content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+            width: 100%;
+        }
+
         .row-controls {
             display: flex;
             justify-content: flex-end;
-            margin-top: 0.5rem;
+            margin-top: 0.25rem;
         }
 
         .btn {
@@ -220,30 +253,16 @@
             font-family: "Kaiti", "STKaiti", "KaiTi", "Georgia", serif;
             border: 1px solid #f0f0f0;
             background-color: #fafafa;
-            padding: 1rem;
+            padding: 1.5rem 1rem;
             border-radius: 8px;
         }
 
-        #poem_sentence {
+        #gushici {
             font-size: 16pt;
             font-weight: bold;
             color: #374151;
-            margin-bottom: 0.5rem;
-            line-height: 1.4;
-        }
-
-        #poem_info {
-            font-size: 10pt;
-            color: #6b7280;
-        }
-        
-        @keyframes fadeIn {
-            from { opacity: 0; }
-            to { opacity: 1; }
-        }
-
-        .poem-loaded {
-            animation: fadeIn 1s ease-in-out;
+            line-height: 1.6;
+            min-height: 1.6em;
         }
 
         .paper-table {
@@ -417,7 +436,7 @@
             每日作业单生成器
         </h1>
         <div style="font-size: 0.875rem; color: var(--text-secondary);">
-            矢量文字 | 纯净打印
+            支持拖拽排序
         </div>
     </header>
 
@@ -436,7 +455,7 @@
 
             <div style="height: 1px; background: #e5e7eb; margin: 1.5rem 0;"></div>
 
-            <label>科目列表</label>
+            <label>科目列表 (拖拽可排序)</label>
             <div id="subjects-container" class="subject-list">
                 <!-- JS 动态生成 -->
             </div>
@@ -451,7 +470,6 @@
 
             <div style="margin-top: 2rem;">
                 <label>备注</label>
-                <!-- 默认填上了专注循环的内容 -->
                 <textarea id="remarks-input" rows="2" placeholder="备注信息..." oninput="updatePreview()">25分钟专注作业，5分钟专注休息，循环</textarea>
             </div>
             
@@ -471,8 +489,7 @@
                     
                     <!-- 每日诗词区域 -->
                     <div class="poem-section">
-                        <div id="poem_sentence">正在加载诗词...</div>
-                        <div id="poem_info"></div>
+                        <div id="gushici">正在加载诗词...</div>
                     </div>
                 </div>
 
@@ -518,22 +535,41 @@
             addSubjectRow('语文', '1. 完成生字抄写。\n2. 预习第10课。');
             addSubjectRow('数学', '完成练习册 P20 页。');
             addSubjectRow('英语', '背诵 Unit 4 单词。');
-            // 家长行
             addSubjectRow('家长', '检查课堂笔记\n检查各科作业：批改订正、完成情况、落实口头作业\n提前准备家校本内容');
 
             updatePreview();
-
-            // 调用今日诗词 API
-            jinrishici.load(function(result) {
-                var sentence = document.querySelector("#poem_sentence");
-                var info = document.querySelector("#poem_info");
-                
-                sentence.innerHTML = result.data.content;
-                info.innerHTML = '【' + result.data.origin.dynasty + '】' + result.data.origin.author + '《' + result.data.origin.title + '》';
-                
-                sentence.parentElement.classList.add('poem-loaded');
+            
+            // 绑定容器拖拽事件
+            const container = document.getElementById('subjects-container');
+            container.addEventListener('dragover', e => {
+                e.preventDefault(); // 允许放置
+                const afterElement = getDragAfterElement(container, e.clientY);
+                const draggable = document.querySelector('.dragging');
+                if (afterElement == null) {
+                    container.appendChild(draggable);
+                } else {
+                    container.insertBefore(draggable, afterElement);
+                }
             });
         });
+
+        // 获取拖拽放置位置下方的元素
+        function getDragAfterElement(container, y) {
+            // 获取容器内所有未被拖拽的科目项
+            const draggableElements = [...container.querySelectorAll('.subject-item:not(.dragging)')];
+
+            return draggableElements.reduce((closest, child) => {
+                const box = child.getBoundingClientRect();
+                // 计算鼠标y坐标与元素中心的偏移量
+                const offset = y - box.top - box.height / 2;
+                // 只需要负偏移量（即鼠标在元素上方），且取最大的那个（最接近0的）
+                if (offset < 0 && offset > closest.offset) {
+                    return { offset: offset, element: child };
+                } else {
+                    return closest;
+                }
+            }, { offset: Number.NEGATIVE_INFINITY }).element;
+        }
 
         function addSubjectRow(subject = '', content = '') {
             const container = document.getElementById('subjects-container');
@@ -541,14 +577,38 @@
 
             const div = document.createElement('div');
             div.className = 'subject-item';
+            div.setAttribute('draggable', 'true'); // 开启拖拽
             div.id = rowId;
             div.innerHTML = `
-            <input type="text" class="input-subject" placeholder="科目 (例如: 数学)" value="${subject}" oninput="updatePreview()">
-            <textarea class="input-content" placeholder="作业内容 (支持换行)" rows="3" oninput="updatePreview()">${content}</textarea>
-            <div class="row-controls">
-                <button class="btn btn-danger-text" onclick="removeRow('${rowId}')">删除</button>
-            </div>
-        `;
+                <div class="drag-handle" title="按住拖拽排序">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="9" cy="12" r="1"></circle>
+                        <circle cx="9" cy="5" r="1"></circle>
+                        <circle cx="9" cy="19" r="1"></circle>
+                        <circle cx="15" cy="12" r="1"></circle>
+                        <circle cx="15" cy="5" r="1"></circle>
+                        <circle cx="15" cy="19" r="1"></circle>
+                    </svg>
+                </div>
+                <div class="subject-content">
+                    <input type="text" class="input-subject" placeholder="科目 (例如: 数学)" value="${subject}" oninput="updatePreview()">
+                    <textarea class="input-content" placeholder="作业内容 (支持换行)" rows="3" oninput="updatePreview()">${content}</textarea>
+                    <div class="row-controls">
+                        <button class="btn btn-danger-text" onclick="removeRow('${rowId}')">删除</button>
+                    </div>
+                </div>
+            `;
+            
+            // 绑定单个元素的拖拽事件
+            div.addEventListener('dragstart', () => {
+                div.classList.add('dragging');
+            });
+
+            div.addEventListener('dragend', () => {
+                div.classList.remove('dragging');
+                updatePreview(); // 拖拽结束后刷新预览
+            });
+
             container.appendChild(div);
             
             if(!subject) {
@@ -627,6 +687,18 @@
                 window.print();
             }, 500);
         }
+
+        // 诗词接口
+        var xhr = new XMLHttpRequest();
+        xhr.open('get', 'https://v1.jinrishici.com/all.json');
+        xhr.onreadystatechange = function () {
+          if (xhr.readyState === 4) {
+            var data = JSON.parse(xhr.responseText);
+            var gushici = document.getElementById('gushici');
+            gushici.innerText = data.content;
+          }
+        };
+        xhr.send();
     </script>
 
 </body>
