@@ -5,7 +5,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>每日作业单生成器 (带诗词版)</title>
-    <!-- 已移除旧的 SDK 引入，使用原生 JS -->
+    <!-- 引入今日诗词 API -->
+    <script src="https://sdk.jinrishici.com/v2/browser/jinrishici.js" charset="utf-8"></script>
     <style>
         :root {
             --primary-color: #4f46e5;
@@ -219,17 +220,30 @@
             font-family: "Kaiti", "STKaiti", "KaiTi", "Georgia", serif;
             border: 1px solid #f0f0f0;
             background-color: #fafafa;
-            padding: 1.5rem 1rem; /* 增加一点内边距以适应单行显示 */
+            padding: 1rem;
             border-radius: 8px;
         }
 
-        /* 修改 ID 为 gushici 以匹配 JS */
-        #gushici {
+        #poem_sentence {
             font-size: 16pt;
             font-weight: bold;
             color: #374151;
-            line-height: 1.6;
-            min-height: 1.6em; /* 防止未加载时高度坍塌 */
+            margin-bottom: 0.5rem;
+            line-height: 1.4;
+        }
+
+        #poem_info {
+            font-size: 10pt;
+            color: #6b7280;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        .poem-loaded {
+            animation: fadeIn 1s ease-in-out;
         }
 
         .paper-table {
@@ -437,6 +451,7 @@
 
             <div style="margin-top: 2rem;">
                 <label>备注</label>
+                <!-- 默认填上了专注循环的内容 -->
                 <textarea id="remarks-input" rows="2" placeholder="备注信息..." oninput="updatePreview()">25分钟专注作业，5分钟专注休息，循环</textarea>
             </div>
             
@@ -454,9 +469,10 @@
                         <span>日期：<span id="preview-date">2023-10-27</span></span>
                     </div>
                     
-                    <!-- 每日诗词区域 (ID 修改为 gushici) -->
+                    <!-- 每日诗词区域 -->
                     <div class="poem-section">
-                        <div id="gushici">正在加载诗词...</div>
+                        <div id="poem_sentence">正在加载诗词...</div>
+                        <div id="poem_info"></div>
                     </div>
                 </div>
 
@@ -502,9 +518,21 @@
             addSubjectRow('语文', '1. 完成生字抄写。\n2. 预习第10课。');
             addSubjectRow('数学', '完成练习册 P20 页。');
             addSubjectRow('英语', '背诵 Unit 4 单词。');
+            // 家长行
             addSubjectRow('家长', '检查课堂笔记\n检查各科作业：批改订正、完成情况、落实口头作业\n提前准备家校本内容');
 
             updatePreview();
+
+            // 调用今日诗词 API
+            jinrishici.load(function(result) {
+                var sentence = document.querySelector("#poem_sentence");
+                var info = document.querySelector("#poem_info");
+                
+                sentence.innerHTML = result.data.content;
+                info.innerHTML = '【' + result.data.origin.dynasty + '】' + result.data.origin.author + '《' + result.data.origin.title + '》';
+                
+                sentence.parentElement.classList.add('poem-loaded');
+            });
         });
 
         function addSubjectRow(subject = '', content = '') {
@@ -599,18 +627,6 @@
                 window.print();
             }, 500);
         }
-
-        // 替换为您提供的诗词接口代码
-        var xhr = new XMLHttpRequest();
-        xhr.open('get', 'https://v1.jinrishici.com/all.json');
-        xhr.onreadystatechange = function () {
-          if (xhr.readyState === 4) {
-            var data = JSON.parse(xhr.responseText);
-            var gushici = document.getElementById('gushici');
-            gushici.innerText = data.content;
-          }
-        };
-        xhr.send();
     </script>
 
 </body>
